@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: vayu
+  datasource:
+    url: jdbc:postgresql://localhost:5432/vayu
+    username: vayu
+    password: vayu
+  jpa:
+    hibernate:
+      ddl-auto: validate

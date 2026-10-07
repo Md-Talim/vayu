@@ -1,0 +1,27 @@
+services:
+  db:
+    image: postgres:18
+    container_name: vayu-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vayu
+      POSTGRES_PASSWORD: vayu
+      POSTGRES_DB: vayu
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    shm_size: 256mb
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  pgdata:
