@@ -1,6 +1,9 @@
 spring:
   application:
     name: vayu
+  mvc:
+    servlet:
+      path: /api/v1
   datasource:
     url: jdbc:postgresql://localhost:5432/vayu
     username: vayu
