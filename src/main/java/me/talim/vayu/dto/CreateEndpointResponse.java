@@ -1,6 +1,7 @@
 package me.talim.vayu.dto;
 
 import java.time.Instant;
+import java.util.Set;
 import java.util.UUID;
 
 import me.talim.vayu.models.Endpoint;
@@ -13,14 +14,16 @@ public record CreateEndpointResponse(
     UUID id,
     String url,
     boolean active,
+    Set<String> eventTypes,
     Instant createdAt,
     String secret
 ) {
-    public static CreateEndpointResponse from(Endpoint endpoint) {
+    public static CreateEndpointResponse from(Endpoint endpoint, Set<String> eventTypes) {
         return new CreateEndpointResponse(
             endpoint.getId(),
             endpoint.getUrl(),
             endpoint.isActive(),
+            eventTypes,
             endpoint.getCreatedAt(),
             endpoint.getSecret()
         );

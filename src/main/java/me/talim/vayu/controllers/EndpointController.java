@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import jakarta.validation.Valid;
 import me.talim.vayu.dto.CreateEndpointRequest;
@@ -31,7 +32,10 @@ public class EndpointController {
     ) {
         CreateEndpointResponse response = endpointService.createEndpoint(request);
 
-        URI location = URI.create("/endpoints/" + response.id());
+        URI location = ServletUriComponentsBuilder.fromCurrentRequest()
+            .path("/{id}")
+            .buildAndExpand(response.id())
+            .toUri();
 
         return ResponseEntity.created(location).body(response);
     }
