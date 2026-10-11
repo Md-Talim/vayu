@@ -2,12 +2,16 @@ package me.talim.vayu.services;
 
 import java.security.SecureRandom;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import me.talim.vayu.dto.CreateEndpointRequest;
 import me.talim.vayu.dto.CreateEndpointResponse;
+import me.talim.vayu.dto.GetEndpointResponse;
 import me.talim.vayu.models.Endpoint;
 import me.talim.vayu.models.Subscription;
 import me.talim.vayu.repositories.EndpointRepository;
@@ -42,6 +46,21 @@ public class EndpointService {
         subscriptionRepository.saveAll(subscriptions);
 
         return CreateEndpointResponse.from(endpoint, request.eventTypes());
+    }
+
+    public GetEndpointResponse getEndpoint(UUID id) {
+        Optional<Endpoint> endpoint = endpointRepository.findById(id);
+        if (endpoint.isEmpty()) {
+            return null;
+        }
+
+        List<Subscription> subscriptions = subscriptionRepository.findAllByEndpoint(endpoint.get());
+        var eventTypes = subscriptions
+            .stream()
+            .map(subscription -> subscription.getEventType())
+            .collect(Collectors.toSet());
+
+        return GetEndpointResponse.from(endpoint.get(), eventTypes);
     }
 
     private String generateSecret() {
