@@ -1,6 +1,7 @@
 package me.talim.vayu.controllers;
 
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -43,6 +44,12 @@ public class EndpointController {
             .toUri();
 
         return ResponseEntity.created(location).body(response);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<GetEndpointResponse>> getAllEndpoints() {
+        List<GetEndpointResponse> response = endpointService.getAllEndpoints();
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{id}")

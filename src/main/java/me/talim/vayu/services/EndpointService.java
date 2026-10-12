@@ -1,6 +1,7 @@
 package me.talim.vayu.services;
 
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -61,6 +62,23 @@ public class EndpointService {
             .collect(Collectors.toSet());
 
         return GetEndpointResponse.from(endpoint.get(), eventTypes);
+    }
+
+    public List<GetEndpointResponse> getAllEndpoints() {
+        List<Endpoint> endpoints = endpointRepository.findAll();
+        List<GetEndpointResponse> response = new ArrayList<>();
+
+        for (Endpoint endpoint : endpoints) {
+            List<Subscription> subscriptions = subscriptionRepository.findAllByEndpoint(endpoint);
+            var eventTypes = subscriptions
+                .stream()
+                .map(subscription -> subscription.getEventType())
+                .collect(Collectors.toSet());
+
+            response.add(GetEndpointResponse.from(endpoint, eventTypes));
+        }
+
+        return response;
     }
 
     private String generateSecret() {
