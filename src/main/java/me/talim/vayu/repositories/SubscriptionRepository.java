@@ -1,5 +1,6 @@
 package me.talim.vayu.repositories;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -13,4 +14,6 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, UUID
     public List<Subscription> findAllByEndpoint(Endpoint endpoint);
 
     public List<Subscription> findAllByEventType(String eventType);
+
+    public List<Subscription> findAllByEndpoint_Idin(Collection<UUID> endpointIds);
 }
