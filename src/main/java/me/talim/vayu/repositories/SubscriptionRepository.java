@@ -9,5 +9,8 @@ import me.talim.vayu.models.Endpoint;
 import me.talim.vayu.models.Subscription;
 
 public interface SubscriptionRepository extends JpaRepository<Subscription, UUID> {
+
     public List<Subscription> findAllByEndpoint(Endpoint endpoint);
+
+    public List<Subscription> findAllByEventType(String eventType);
 }
