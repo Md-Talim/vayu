@@ -15,5 +15,5 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, UUID
 
     public List<Subscription> findAllByEventType(String eventType);
 
-    public List<Subscription> findAllByEndpoint_Idin(Collection<UUID> endpointIds);
+    public List<Subscription> findAllByEndpoint_IdIn(Collection<UUID> endpointIds);
 }

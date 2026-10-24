@@ -82,7 +82,7 @@ public class EndpointService {
             eventTypesByEndpoint = Map.of();
         } else {
             List<UUID> endpointIds = endpoints.stream().map(Endpoint::getId).toList();
-            List<Subscription> subscriptions = subscriptionRepository.findAllByEndpoint_Idin(endpointIds);
+            List<Subscription> subscriptions = subscriptionRepository.findAllByEndpoint_IdIn(endpointIds);
 
             eventTypesByEndpoint = subscriptions.stream()
                     .collect(Collectors.groupingBy(
