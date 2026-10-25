@@ -1,22 +1,18 @@
 package me.talim.vayu.services;
 
-import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Optional;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import me.talim.vayu.dto.CreateEventRequest;
 import me.talim.vayu.dto.CreateEventResponse;
 import me.talim.vayu.dto.CreateEventResult;
 import me.talim.vayu.exception.IdempotencyConflictException;
 import me.talim.vayu.exception.InvalidEventPayloadException;
-import me.talim.vayu.models.Delivery;
 import me.talim.vayu.models.Event;
-import me.talim.vayu.models.Subscription;
 import me.talim.vayu.repositories.DeliveryRepository;
 import me.talim.vayu.repositories.EventRepository;
-import me.talim.vayu.repositories.SubscriptionRepository;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -25,72 +21,91 @@ import tools.jackson.databind.ObjectMapper;
 public class EventService {
 
     private final EventRepository eventRepository;
-    private final SubscriptionRepository subscriptionRepository;
     private final DeliveryRepository deliveryRepository;
     private final ObjectMapper objectMapper;
+    private final EventWriter eventWriter;
 
     public EventService(
             EventRepository eventRepository,
-            SubscriptionRepository subscriptionRepository,
             DeliveryRepository deliveryRepository,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            EventWriter eventWriter
     ) {
         this.eventRepository = eventRepository;
-        this.subscriptionRepository = subscriptionRepository;
         this.deliveryRepository = deliveryRepository;
         this.objectMapper = objectMapper;
+        this.eventWriter = eventWriter;
     }
 
-    @Transactional
     public CreateEventResult createEvent(CreateEventRequest request, String idempotencyKey) {
-        var existingEvent = eventRepository.findByIdempotencyKey(idempotencyKey);
+        JsonNode payload = parsePayload(request.payload());
+
+        Optional<Event> existingEvent = eventRepository.findByIdempotencyKey(idempotencyKey);
         if (existingEvent.isPresent()) {
-            Event event = existingEvent.get();
-
-            if (!isSameRequest(event, request)) {
-                throw new IdempotencyConflictException("Idempotency key already used for a different event");
-            }
-
-            long existingDeliveryCount = deliveryRepository.countByEvent_Id(event.getId());
-
-            return new CreateEventResult(CreateEventResponse.from(event, (int) existingDeliveryCount), true);
-        }
-
-        Event event = new Event(request.type(), request.payload(), idempotencyKey);
-
-        List<Subscription> subscriptions = subscriptionRepository.findAllByEventType(request.type());
-        List<Delivery> deliveries = subscriptions
-                .stream()
-                .map(subscription -> new Delivery(event, subscription))
-                .collect(Collectors.toList());
-
-        Event savedEvent = eventRepository.save(event);
-        deliveryRepository.saveAll(deliveries);
-
-        return new CreateEventResult(CreateEventResponse.from(savedEvent, deliveries.size()), false);
-    }
-
-    private boolean isSameRequest(
-            Event existingEvent,
-            CreateEventRequest request
-    ) {
-        if (!existingEvent.getType().equals(request.type())) {
-            return false;
+            return replay(existingEvent.get(), request, payload);
         }
 
         try {
-            JsonNode existingPayload
-                    = objectMapper.readTree(existingEvent.getPayload());
+            return eventWriter.createEvent(request, idempotencyKey);
+        } catch (DataIntegrityViolationException exception) {
+            return replayAfterConcurrentInsert(exception, request, idempotencyKey, payload);
+        }
+    }
 
-            JsonNode requestedPayload
-                    = objectMapper.readTree(request.payload());
+    private CreateEventResult replayAfterConcurrentInsert(
+            DataIntegrityViolationException exception,
+            CreateEventRequest request,
+            String idempotencyKey,
+            JsonNode payload
+    ) {
+        Event existingEvent = eventRepository.findByIdempotencyKey(idempotencyKey)
+                .orElseThrow(() -> exception);
 
-            return existingPayload.equals(requestedPayload);
-        } catch (JacksonException exception) {
-            throw new InvalidEventPayloadException(
-                    "Event payload must be valid JSON",
-                    exception
+        return replay(existingEvent, request, payload);
+    }
+
+    private CreateEventResult replay(Event event, CreateEventRequest request, JsonNode payload) {
+        if (!isSameRequest(event, request, payload)) {
+            throw new IdempotencyConflictException(
+                    "Idempotency key already used for a different event"
             );
+        }
+
+        long deliveryCount = deliveryRepository.countByEvent_Id(event.getId());
+
+        return new CreateEventResult(
+                CreateEventResponse.from(event, (int) deliveryCount),
+                true
+        );
+    }
+
+    private boolean isSameRequest(
+            Event event,
+            CreateEventRequest request,
+            JsonNode requestedPayload
+    ) {
+        if (!event.getType().equals(request.type())) {
+            return false;
+        }
+
+        return parsePayload(event.getPayload()).equals(requestedPayload);
+    }
+
+    private JsonNode parsePayload(String payload) {
+        if (payload == null || payload.isBlank()) {
+            throw new InvalidEventPayloadException("Event payload must be valid JSON");
+        }
+
+        try {
+            JsonNode parsed = objectMapper.readTree(payload);
+
+            if (parsed == null || parsed.isMissingNode()) {
+                throw new InvalidEventPayloadException("Event payload must be valid JSON");
+            }
+
+            return parsed;
+        } catch (JacksonException exception) {
+            throw new InvalidEventPayloadException("Event payload must be valid JSON", exception);
         }
     }
 }

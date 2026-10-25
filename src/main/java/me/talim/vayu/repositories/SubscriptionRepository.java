@@ -13,7 +13,7 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, UUID
 
     public List<Subscription> findAllByEndpoint(Endpoint endpoint);
 
-    public List<Subscription> findAllByEventType(String eventType);
+    public List<Subscription> findAllByEventTypeAndEndpoint_ActiveTrue(String eventType);
 
     public List<Subscription> findAllByEndpoint_IdIn(Collection<UUID> endpointIds);
 }

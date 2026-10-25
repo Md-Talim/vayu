@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -94,6 +95,17 @@ public class ApiExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 "INVALID_PARAMETER",
                 "invalid value for parameter '" + exception.getName() + "'"
+        );
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ApiError> handleMissingRequestHeader(
+            MissingRequestHeaderException exception
+    ) {
+        return respond(
+                HttpStatus.BAD_REQUEST,
+                "MISSING_HEADER",
+                "required header '" + exception.getHeaderName() + "' is missing"
         );
     }
 
