@@ -1,6 +1,8 @@
 package me.talim.vayu.models;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -13,6 +15,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 
 @Entity
@@ -56,6 +59,9 @@ public class Delivery {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    @OneToMany(mappedBy = "delivery")
+    private List<DeliveryAttempt> attempts = new ArrayList<>();
+
     protected Delivery() {}
 
     public Delivery(Event event, Subscription subscription) {
@@ -83,8 +89,16 @@ public class Delivery {
         return attemptCount;
     }
 
+    public int getMaxAttempts() {
+        return maxAttempts;
+    }
+
     public Instant getNextAttemptAt() {
         return nextAttemptAt;
+    }
+
+    public Instant getLockedAt() {
+        return lockedAt;
     }
 
     public Instant getCreatedAt() {
@@ -93,6 +107,14 @@ public class Delivery {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public Instant getCompletedAt() {
+        return completedAt;
+    }
+
+    public List<DeliveryAttempt> getAttempts() {
+        return attempts;
     }
 
     public void setStatus(DeliveryStatus status) {

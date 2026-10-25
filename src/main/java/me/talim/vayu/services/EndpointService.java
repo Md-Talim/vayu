@@ -3,7 +3,6 @@ package me.talim.vayu.services;
 import java.security.SecureRandom;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -18,6 +17,7 @@ import me.talim.vayu.dto.CreateEndpointRequest;
 import me.talim.vayu.dto.CreateEndpointResponse;
 import me.talim.vayu.dto.GetEndpointResponse;
 import me.talim.vayu.dto.GetEndpointsResponse;
+import me.talim.vayu.exception.NotFoundException;
 import me.talim.vayu.models.Endpoint;
 import me.talim.vayu.models.Subscription;
 import me.talim.vayu.repositories.EndpointRepository;
@@ -53,18 +53,16 @@ public class EndpointService {
     }
 
     public GetEndpointResponse getEndpoint(UUID id) {
-        Optional<Endpoint> endpoint = endpointRepository.findById(id);
-        if (endpoint.isEmpty()) {
-            return null;
-        }
+        Endpoint endpoint = endpointRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("endpoint " + id + " not found"));
 
-        List<Subscription> subscriptions = subscriptionRepository.findAllByEndpoint(endpoint.get());
+        List<Subscription> subscriptions = subscriptionRepository.findAllByEndpoint(endpoint);
         var eventTypes = subscriptions
                 .stream()
                 .map(subscription -> subscription.getEventType())
                 .collect(Collectors.toSet());
 
-        return GetEndpointResponse.from(endpoint.get(), eventTypes);
+        return GetEndpointResponse.from(endpoint, eventTypes);
     }
 
     public GetEndpointsResponse getAllEndpoints(Boolean active, int page, int size) {
