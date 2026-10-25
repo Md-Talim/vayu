@@ -1,10 +1,10 @@
 package me.talim.vayu;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
-class VayuApplicationTests {
+import me.talim.vayu.support.PostgresIntegrationTest;
+
+class VayuApplicationTests extends PostgresIntegrationTest {
 
 	@Test
 	void contextLoads() {
