@@ -270,4 +270,4 @@ Keep the lease longer than the maximum time a claimed delivery can wait in the e
 - No manual replay yet.
 - Endpoint secrets are stored as plaintext because vayu needs them to compute signatures.
 - Delivery is at least once, so receivers must deduplicate.
-- The API and Actuator endpoints are not authenticated yet.
+- The API and Actuator endpoints are intentionally unauthenticated. Vayu is a single-tenant, self-hosted service for trusted internal networks, so authentication and multi-tenancy are out of scope. Expose it through a reverse proxy or API gateway if it needs to be reachable more widely.
