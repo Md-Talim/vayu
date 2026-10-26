@@ -28,30 +28,39 @@ public class DeliveryAttempt {
     @Column(name = "attempt_number", nullable = false, updatable = false)
     private int attemptNumber;
 
-    @Column(name = "http_status", updatable = false)
+    @Column(name = "http_status")
     private Integer httpStatus;
 
-    @Column(updatable = false)
+    @Column(name = "response_body")
+    private String responseBody;
+
+    @Column
     private String error;
 
-    @Column(name = "started_at", nullable = false)
-    private Instant startedAt = Instant.now();
+    @Column(name = "started_at", nullable = false, updatable = false)
+    private Instant startedAt;
 
     @Column(name = "completed_at")
     private Instant completedAt;
 
     protected DeliveryAttempt() {}
 
-    public DeliveryAttempt(
-        Delivery delivery,
-        int attemptNumber,
-        Integer httpStatus,
-        String error
-    ) {
+    public DeliveryAttempt(Delivery delivery, int attemptNumber, Instant startedAt) {
         this.delivery = delivery;
         this.attemptNumber = attemptNumber;
+        this.startedAt = startedAt;
+    }
+
+    public void complete(
+            Integer httpStatus,
+            String responseBody,
+            String error,
+            Instant completedAt
+    ) {
         this.httpStatus = httpStatus;
+        this.responseBody = responseBody;
         this.error = error;
+        this.completedAt = completedAt;
     }
 
     public UUID getId() {
@@ -68,6 +77,10 @@ public class DeliveryAttempt {
 
     public Integer getHttpStatus() {
         return httpStatus;
+    }
+
+    public String getResponseBody() {
+        return responseBody;
     }
 
     public String getError() {

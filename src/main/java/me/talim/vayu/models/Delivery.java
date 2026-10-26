@@ -44,11 +44,14 @@ public class Delivery {
     @Column(name = "max_attempts", nullable = false)
     private int maxAttempts = 10;
 
-    @Column(name = "next_attempt_at", nullable = false)
+    @Column(name = "next_attempt_at")
     private Instant nextAttemptAt = Instant.now();
 
     @Column(name = "locked_at")
     private Instant lockedAt;
+
+    @Column(name = "lock_token")
+    private UUID lockToken;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
@@ -101,6 +104,10 @@ public class Delivery {
         return lockedAt;
     }
 
+    public UUID getLockToken() {
+        return lockToken;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -117,15 +124,30 @@ public class Delivery {
         return attempts;
     }
 
-    public void setStatus(DeliveryStatus status) {
-        this.status = status;
+    public void markDelivered(Instant now) {
+        this.status = DeliveryStatus.DELIVERED;
+        this.nextAttemptAt = null;
+        this.completedAt = now;
+        this.lockedAt = null;
+        this.lockToken = null;
+        this.updatedAt = now;
     }
 
-    public void setAttemptCount(int attemptCount) {
-        this.attemptCount = attemptCount;
-    }
-
-    public void setNextAttemptAt(Instant nextAttemptAt) {
+    public void scheduleRetry(Instant nextAttemptAt, Instant now) {
+        this.status = DeliveryStatus.PENDING;
         this.nextAttemptAt = nextAttemptAt;
+        this.completedAt = null;
+        this.lockedAt = null;
+        this.lockToken = null;
+        this.updatedAt = now;
+    }
+
+    public void markFailed(Instant now) {
+        this.status = DeliveryStatus.FAILED;
+        this.nextAttemptAt = null;
+        this.completedAt = now;
+        this.lockedAt = null;
+        this.lockToken = null;
+        this.updatedAt = now;
     }
 }

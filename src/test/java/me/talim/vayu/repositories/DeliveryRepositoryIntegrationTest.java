@@ -2,6 +2,7 @@ package me.talim.vayu.repositories;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
@@ -62,7 +63,8 @@ class DeliveryRepositoryIntegrationTest extends PostgresIntegrationTest {
         );
         entityManager.flush();
 
-        markDelivered(delivered.getId());
+        delivered.markDelivered(Instant.now());
+        entityManager.flush();
         entityManager.clear();
 
         assertThat(deliveryRepository.findPage(null, null, FIRST_PAGE).getTotalElements())
@@ -96,8 +98,13 @@ class DeliveryRepositoryIntegrationTest extends PostgresIntegrationTest {
         Delivery delivery = deliveryRepository.save(
                 new Delivery(fixture.event(), fixture.firstSubscription())
         );
-        entityManager.persist(new DeliveryAttempt(delivery, 1, 500, "receiver returned 500"));
-        entityManager.persist(new DeliveryAttempt(delivery, 2, 204, null));
+        Instant now = Instant.now();
+        DeliveryAttempt firstAttempt = new DeliveryAttempt(delivery, 1, now);
+        firstAttempt.complete(500, "receiver error", "receiver returned 500", now);
+        DeliveryAttempt secondAttempt = new DeliveryAttempt(delivery, 2, now);
+        secondAttempt.complete(204, null, null, now);
+        entityManager.persist(firstAttempt);
+        entityManager.persist(secondAttempt);
         entityManager.flush();
         entityManager.clear();
 
@@ -150,17 +157,6 @@ class DeliveryRepositoryIntegrationTest extends PostgresIntegrationTest {
         );
 
         return new Fixture(event, firstEndpoint, secondEndpoint, firstSubscription, secondSubscription);
-    }
-
-    private void markDelivered(UUID deliveryId) {
-        entityManager
-                .createNativeQuery("""
-                        UPDATE deliveries
-                        SET status = 'DELIVERED', completed_at = now()
-                        WHERE id = :id
-                        """)
-                .setParameter("id", deliveryId)
-                .executeUpdate();
     }
 
     private record Fixture(

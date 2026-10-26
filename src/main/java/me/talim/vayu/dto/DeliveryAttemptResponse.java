@@ -9,6 +9,7 @@ public record DeliveryAttemptResponse(
     UUID id,
     int attemptNumber,
     Integer httpStatus,
+    String responseBody,
     String error,
     Instant startedAt,
     Instant completedAt
@@ -18,6 +19,7 @@ public record DeliveryAttemptResponse(
             attempt.getId(),
             attempt.getAttemptNumber(),
             attempt.getHttpStatus(),
+            attempt.getResponseBody(),
             attempt.getError(),
             attempt.getStartedAt(),
             attempt.getCompletedAt()
