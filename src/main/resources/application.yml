@@ -11,3 +11,26 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+  task:
+    scheduling:
+      pool:
+        size: 2
+
+vayu:
+  worker:
+    enabled: true
+    poll-interval: 1s
+    batch-size: 4
+    concurrency: 4
+    queue-capacity: 4
+    connect-timeout: 2s
+    read-timeout: 5s
+    lease: 60s
+    retry:
+      base-delay: 2s
+      max-delay: 5m
+      multiplier: 2.0
+    reaper:
+      enabled: true
+      interval: 30s
+      batch-size: 50
