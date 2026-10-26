@@ -24,6 +24,20 @@ springdoc:
     operations-sorter: method
     tags-sorter: alpha
 
+logging:
+  structured:
+    format:
+      console: ecs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    tags:
+      application: vayu
+
 vayu:
   worker:
     enabled: true

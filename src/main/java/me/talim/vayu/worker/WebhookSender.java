@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.Locale;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -14,6 +15,9 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+import io.micrometer.core.instrument.Timer;
+import me.talim.vayu.observability.VayuMetrics;
+
 @Component
 public class WebhookSender {
 
@@ -22,13 +26,32 @@ public class WebhookSender {
 
     private final RestClient restClient;
     private final WebhookSigner signer;
+    private final VayuMetrics metrics;
 
-    public WebhookSender(RestClient deliveryRestClient, WebhookSigner signer) {
+    public WebhookSender(
+            RestClient deliveryRestClient,
+            WebhookSigner signer,
+            VayuMetrics metrics
+    ) {
         this.restClient = deliveryRestClient;
         this.signer = signer;
+        this.metrics = metrics;
     }
 
     public DeliveryOutcome send(DeliveryContext context, int attemptNumber) {
+        Timer.Sample sample = metrics.startHttpTimer();
+        String outcome = "error";
+
+        try {
+            DeliveryOutcome result = doSend(context, attemptNumber);
+            outcome = result.type().name().toLowerCase(Locale.ROOT);
+            return result;
+        } finally {
+            metrics.recordHttp(sample, outcome);
+        }
+    }
+
+    private DeliveryOutcome doSend(DeliveryContext context, int attemptNumber) {
         if (!context.endpointActive()) {
             return DeliveryOutcome.failed(null, null, "endpoint inactive");
         }

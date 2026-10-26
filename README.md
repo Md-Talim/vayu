@@ -4,13 +4,14 @@
 [![Java version](https://img.shields.io/badge/Java-21-orange)](https://adoptium.net/)
 [![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Prometheus](https://img.shields.io/badge/Metrics-Prometheus-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/)
 [![License: MIT](https://img.shields.io/github/license/md-talim/vayu)](LICENSE)
 
 A small webhook delivery service built with Java 21, Spring Boot and PostgreSQL.
 
 Your app tells vayu that something happened (a payment succeeded, an order shipped). Vayu sends a signed POST to every subscribed endpoint, retries failures, and records every attempt.
 
-[How It Works](#how-it-works) • [Getting Started](#getting-started) • [API Docs](#api-documentation) • [Receiving Webhooks](#receiving-a-webhook) • [Retry Policy](#retry-policy) • [Configuration](#configuration)
+[How It Works](#how-it-works) • [Getting Started](#getting-started) • [API Docs](#api-documentation) • [Receiving Webhooks](#receiving-a-webhook) • [Retry Policy](#retry-policy) • [Observability](#observability) • [Configuration](#configuration)
 
 ## Why this exists
 
@@ -86,7 +87,7 @@ stateDiagram-v2
 docker compose up --build
 ```
 
-This starts PostgreSQL and the application. The API is available at `http://localhost:8080/api/v1`, and the health endpoint is at `http://localhost:8080/api/v1/actuator/health`.
+This starts PostgreSQL and the application. The API is available at `http://localhost:8080/api/v1`, and the health endpoint is at `http://localhost:8080/api/v1/actuator/health`. See [Observability](#observability) for metrics and structured logs.
 
 The database uses a named volume, so data survives `docker compose down`. Use `docker compose down -v` if you also want to delete the data.
 
@@ -206,6 +207,46 @@ The worker is embedded in the application. There is no separate worker process.
 
 The reaper looks for `DELIVERING` rows whose lease has expired. It completes the open attempt with `lease expired`, then either schedules a retry or marks the delivery failed. A late completion from the old worker is rejected by the lock token.
 
+## Observability
+
+### Structured logs
+
+Vayu writes ECS JSON logs to stdout. Every request gets a request ID:
+
+- If the client sends a valid `X-Request-Id`, vayu reuses it.
+- Otherwise, vayu generates a UUID.
+- The same value is returned in the `X-Request-Id` response header.
+
+Request logs include `requestId`, `httpMethod`, `httpPath`, `httpStatus` and `durationMs`. Delivery logs include `deliveryId`, `eventId`, `eventType`, `attempt` and `outcome`.
+
+Delivery and event identifiers stay in logs instead of metric tags because they are unbounded. To read the JSON logs during development:
+
+```bash
+docker compose logs -f app | grep '^{' | jq
+```
+
+### Metrics
+
+Actuator exposes health, metrics and Prometheus under the same servlet path:
+
+- `http://localhost:8080/api/v1/actuator/health`
+- `http://localhost:8080/api/v1/actuator/metrics`
+- `http://localhost:8080/api/v1/actuator/prometheus`
+
+Custom metrics use low-cardinality tags and carry the common `application="vayu"` tag. The names below use the Prometheus convention; the Actuator metrics endpoint uses the equivalent dotted Micrometer names:
+
+| Metric                                 | Type    | Tags      | Meaning                                  |
+| -------------------------------------- | ------- | --------- | ---------------------------------------- |
+| `vayu_delivery_attempts_total`         | Counter | `outcome` | Delivery attempts by outcome             |
+| `vayu_delivery_http_duration_seconds`  | Timer   | `outcome` | Time spent sending a webhook request     |
+| `vayu_worker_claimed_deliveries_total` | Counter |           | Deliveries claimed by the worker         |
+| `vayu_worker_poll_duration_seconds`    | Timer   | `result`  | Time spent in one worker poll            |
+| `vayu_worker_executor_active`          | Gauge   |           | Delivery threads currently running tasks |
+| `vayu_worker_executor_queue_depth`     | Gauge   |           | Deliveries waiting in the executor queue |
+| `vayu_worker_executor_queue_remaining` | Gauge   |           | Remaining capacity in the executor queue |
+
+The `outcome` tag is `delivered`, `retry` or `failed` for delivery attempts. The HTTP timer also uses `error` when the request fails before a response is classified. The `result` tag for polls is `success` or `error`.
+
 ## Configuration
 
 The defaults are in `src/main/resources/application.yml`.
@@ -229,4 +270,4 @@ Keep the lease longer than the maximum time a claimed delivery can wait in the e
 - No manual replay yet.
 - Endpoint secrets are stored as plaintext because vayu needs them to compute signatures.
 - Delivery is at least once, so receivers must deduplicate.
-- The API is not authenticated yet.
+- The API and Actuator endpoints are not authenticated yet.

@@ -22,10 +22,14 @@ import org.springframework.web.client.RestClient;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import me.talim.vayu.observability.VayuMetrics;
+
 class WebhookSenderTest {
 
     private WireMockServer server;
     private WebhookSender sender;
+    private SimpleMeterRegistry registry;
 
     @BeforeEach
     void setUp() {
@@ -38,9 +42,11 @@ class WebhookSenderTest {
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
         requestFactory.setReadTimeout(Duration.ofMillis(300));
 
+        registry = new SimpleMeterRegistry();
         sender = new WebhookSender(
                 RestClient.builder().requestFactory(requestFactory).build(),
-                new WebhookSigner()
+                new WebhookSigner(),
+                new VayuMetrics(registry)
         );
     }
 
@@ -69,6 +75,21 @@ class WebhookSenderTest {
                 .withHeader("X-Vayu-Attempt", matching("1"))
                 .withHeader("X-Vayu-Timestamp", matching("\\d+"))
                 .withHeader("X-Vayu-Signature", matching("v1=[0-9a-f]{64}")));
+    }
+
+    @Test
+    void recordsHttpTimerByOutcome() {
+        server.stubFor(post(urlEqualTo("/hook"))
+                .willReturn(aResponse().withStatus(200)));
+
+        sender.send(context(true), 1);
+
+        assertThat(registry
+                .get("vayu.delivery.http.duration")
+                .tag("outcome", "delivered")
+                .timer()
+                .count()
+        ).isEqualTo(1);
     }
 
     @Test
