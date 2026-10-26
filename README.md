@@ -10,7 +10,7 @@ A small webhook delivery service built with Java 21, Spring Boot and PostgreSQL.
 
 Your app tells vayu that something happened (a payment succeeded, an order shipped). Vayu sends a signed POST to every subscribed endpoint, retries failures, and records every attempt.
 
-[How It Works](#how-it-works) • [Getting Started](#getting-started) • [Receiving Webhooks](#receiving-a-webhook) • [Retry Policy](#retry-policy) • [Configuration](#configuration)
+[How It Works](#how-it-works) • [Getting Started](#getting-started) • [API Docs](#api-documentation) • [Receiving Webhooks](#receiving-a-webhook) • [Retry Policy](#retry-policy) • [Configuration](#configuration)
 
 ## Why this exists
 
@@ -106,6 +106,16 @@ The application reads the default local database settings from `src/main/resourc
 ```
 
 The tests use Testcontainers, so Docker must be running. They do not use the Compose database.
+
+### API documentation
+
+Swagger UI: `http://localhost:8080/api/v1/swagger-ui.html`
+
+OpenAPI JSON: `http://localhost:8080/api/v1/v3/api-docs`
+
+The Bruno collection in [`bruno/vayu`](bruno/vayu) follows the main flow: create an endpoint, create an event, then inspect deliveries and attempts. It uses `http://localhost:8080/api/v1` as the base URL.
+
+Swagger UI and the OpenAPI document are enabled by default. Set `springdoc.api-docs.enabled=false` and `springdoc.swagger-ui.enabled=false` to disable them.
 
 ## Quick example
 
@@ -220,4 +230,3 @@ Keep the lease longer than the maximum time a claimed delivery can wait in the e
 - Endpoint secrets are stored as plaintext because vayu needs them to compute signatures.
 - Delivery is at least once, so receivers must deduplicate.
 - The API is not authenticated yet.
-- Full API documentation is not added yet.

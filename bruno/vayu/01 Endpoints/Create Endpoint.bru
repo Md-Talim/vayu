@@ -1,0 +1,35 @@
+meta {
+  name: Create Endpoint
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/endpoints
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "url": "{{receiverUrl}}",
+    "eventTypes": ["payment.succeeded"]
+  }
+}
+
+script:post-response {
+  bru.setVar("endpointId", res.body.id);
+  bru.setVar("endpointSecret", res.body.secret);
+}
+
+tests {
+  test("endpoint created", function() {
+    expect(res.status).to.equal(201);
+    expect(res.body.id).to.be.a("string");
+    expect(res.body.secret).to.be.a("string");
+  });
+}
