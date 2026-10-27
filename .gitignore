@@ -37,3 +37,6 @@ build/
 
 ### Prettier ###
 .prettierrc
+
+### Benchmarks ###
+benchmarks/results/*.log
