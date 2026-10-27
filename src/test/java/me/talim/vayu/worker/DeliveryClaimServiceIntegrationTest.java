@@ -99,6 +99,7 @@ class DeliveryClaimServiceIntegrationTest extends PostgresIntegrationTest {
 
         assertThat(claimed).extracting(ClaimedDelivery::deliveryId).containsExactly(due);
         assertThat(claimed.get(0).attemptNumber()).isEqualTo(1);
+        assertThat(claimed.get(0).maxAttempts()).isEqualTo(10);
 
         Delivery claimedDelivery = deliveryRepository.findById(due).orElseThrow();
         assertThat(claimedDelivery.getStatus()).isEqualTo(DeliveryStatus.DELIVERING);

@@ -40,47 +40,71 @@ public class DeliveryWorker {
 
     public int runOnce() {
         Timer.Sample sample = metrics.startPollTimer();
-        boolean success = false;
+        boolean success = true;
+        int totalClaimed = 0;
 
         try {
-            List<ClaimedDelivery> claimed;
+            for (int batch = 0; batch < properties.maxBatchesPerPoll(); batch++) {
+                // Stop before claiming rows that cannot fit in the executor queue.
+                if (properties.queueCapacity() > 0
+                        && executor.getThreadPoolExecutor().getQueue().remainingCapacity()
+                        < properties.batchSize()) {
+                    break;
+                }
 
-            try {
-                claimed = claimService.claim(properties.batchSize());
-            } catch (RuntimeException exception) {
-                log.error("Could not claim due deliveries", exception);
-                return 0;
-            }
+                List<ClaimedDelivery> claimed;
 
-            metrics.recordClaimed(claimed.size());
-            boolean rejected = false;
-
-            for (ClaimedDelivery delivery : claimed) {
                 try {
-                    executor.execute(() -> processor.process(delivery));
-                } catch (TaskRejectedException exception) {
-                    rejected = true;
-                    try (
-                            MDC.MDCCloseable deliveryId = MDC.putCloseable(
-                                    "deliveryId",
-                                    delivery.deliveryId().toString()
-                            );
-                            MDC.MDCCloseable attempt = MDC.putCloseable(
-                                    "attempt",
-                                    Integer.toString(delivery.attemptNumber())
-                            )
-                    ) {
-                        log.error("Delivery was claimed but not submitted", exception);
+                    claimed = claimService.claim(properties.batchSize());
+                } catch (RuntimeException exception) {
+                    log.error("Could not claim due deliveries", exception);
+                    success = false;
+                    return totalClaimed;
+                }
+
+                if (claimed.isEmpty()) {
+                    break;
+                }
+
+                totalClaimed += claimed.size();
+                metrics.recordClaimed(claimed.size());
+                boolean rejected = false;
+
+                for (ClaimedDelivery delivery : claimed) {
+                    try {
+                        executor.execute(() -> processor.process(delivery));
+                    } catch (TaskRejectedException exception) {
+                        rejected = true;
+                        try (
+                                MDC.MDCCloseable deliveryId = MDC.putCloseable(
+                                        "deliveryId",
+                                        delivery.deliveryId().toString()
+                                );
+                                MDC.MDCCloseable attempt = MDC.putCloseable(
+                                        "attempt",
+                                        Integer.toString(delivery.attemptNumber())
+                                )
+                        ) {
+                            log.error("Delivery was claimed but not submitted", exception);
+                        }
                     }
+                }
+
+                if (rejected) {
+                    success = false;
+                    break;
+                }
+
+                if (claimed.size() < properties.batchSize()) {
+                    break;
                 }
             }
 
-            if (!claimed.isEmpty()) {
-                log.debug("Claimed {} deliveries", claimed.size());
+            if (totalClaimed > 0) {
+                log.debug("Claimed {} deliveries", totalClaimed);
             }
 
-            success = !rejected;
-            return claimed.size();
+            return totalClaimed;
         } finally {
             metrics.recordPoll(sample, success);
         }

@@ -18,11 +18,13 @@ SAMPLER_PID=${SAMPLER_PID:-target/bench-sampler.pid}
 DEFAULT_BACKLOG=${DEFAULT_BACKLOG:-100}
 CAPACITY_BACKLOG=${CAPACITY_BACKLOG:-10000}
 PRELOAD_VUS=${PRELOAD_VUS:-80}
-MIXED_RATES=${MIXED_RATES:-"100 200 300"}
+MIXED_RATES=${MIXED_RATES:-"100 200 250 300"}
 MIXED_DURATION=${MIXED_DURATION:-60s}
 MIXED_PRE_VUS=${MIXED_PRE_VUS:-150}
-MIXED_MAX_VUS=${MIXED_MAX_VUS:-600}
-PHASES=${PHASES:-"default capacity mixed"}
+MIXED_MAX_VUS=${MIXED_MAX_VUS:-1000}
+API_RATE=${API_RATE:-100}
+API_DURATION=${API_DURATION:-30s}
+PHASES=${PHASES:-"default capacity api mixed"}
 BUILD_APP=${BUILD_APP:-1}
 
 mkdir -p "$RESULTS_DIR"
@@ -93,7 +95,7 @@ start_app() {
         -e "VAYU_WORKER_POLL_INTERVAL=10ms"
         -e "VAYU_WORKER_BATCH_SIZE=50"
         -e "VAYU_WORKER_CONCURRENCY=32"
-        -e "VAYU_WORKER_QUEUE_CAPACITY=1000"
+        -e "VAYU_WORKER_QUEUE_CAPACITY=200"
         -e "VAYU_WORKER_LEASE=300s"
         -e "VAYU_WORKER_REAPER_ENABLED=false"
       )
@@ -204,6 +206,19 @@ collect_results() {
   } | tee "$output"
 }
 
+collect_api_results() {
+  local label=$1
+  local output="$RESULTS_DIR/${RUN_ID}-${label}-db.txt"
+
+  {
+    printf '## event counts\n'
+    db_psql -f - < benchmarks/sql/event-counts.sql
+    printf '\n## receiver\n'
+    curl -fsS http://localhost:9090/stats
+    printf '\n'
+  } | tee "$output"
+}
+
 summarize_metrics() {
   local label=$1
   local csv="$RESULTS_DIR/${RUN_ID}-${label}-metrics.csv"
@@ -244,12 +259,13 @@ run_preload() {
 run_ingest() {
   local label=$1
   local rate=$2
+  local duration=${3:-$MIXED_DURATION}
 
   k6 run \
     --summary-export="$RESULTS_DIR/${RUN_ID}-${label}-ingest.json" \
     -e "RUN_ID=${RUN_ID}-${label}" \
     -e "RATE=${rate}" \
-    -e "DURATION=${MIXED_DURATION}" \
+    -e "DURATION=${duration}" \
     -e "PRE_VUS=${MIXED_PRE_VUS}" \
     -e "MAX_VUS=${MIXED_MAX_VUS}" \
     -e "BASE_URL=${API_BASE}" \
@@ -291,6 +307,22 @@ capacity_phase() {
   wait_for_drain "$label" 300
   stop_sampler
   collect_results "$label"
+  summarize_metrics "$label"
+  stop_app
+}
+
+api_only_phase() {
+  local label="api-only-${API_RATE}rps"
+
+  log "api only: reset database"
+  reset_db
+  start_receiver
+  start_app disabled
+  start_sampler "$RESULTS_DIR/${RUN_ID}-${label}-metrics.csv"
+  log "api only: run ingest for ${API_DURATION}"
+  run_ingest "$label" "$API_RATE" "$API_DURATION"
+  stop_sampler
+  collect_api_results "$label"
   summarize_metrics "$label"
   stop_app
 }
@@ -347,6 +379,9 @@ for phase in $PHASES; do
       ;;
     capacity)
       capacity_phase
+      ;;
+    api)
+      api_only_phase
       ;;
     mixed)
       for rate in $MIXED_RATES; do

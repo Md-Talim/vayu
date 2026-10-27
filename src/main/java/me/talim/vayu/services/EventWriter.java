@@ -48,7 +48,7 @@ public class EventWriter {
                 .map(subscription -> new Delivery(event, subscription))
                 .toList();
 
-        Event savedEvent = eventRepository.saveAndFlush(event);
+        Event savedEvent = eventRepository.save(event);
         deliveryRepository.saveAll(deliveries);
 
         return new CreateEventResult(

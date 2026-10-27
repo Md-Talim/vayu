@@ -11,6 +11,12 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
   task:
     scheduling:
       pool:
@@ -41,10 +47,11 @@ management:
 vayu:
   worker:
     enabled: true
-    poll-interval: 1s
-    batch-size: 4
-    concurrency: 4
-    queue-capacity: 4
+    poll-interval: 100ms
+    batch-size: 20
+    concurrency: 16
+    queue-capacity: 200
+    max-batches-per-poll: 10
     connect-timeout: 2s
     read-timeout: 5s
     lease: 60s

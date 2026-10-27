@@ -2,17 +2,17 @@
 Pager usage is off.
   status   | deliveries 
 -----------+------------
- DELIVERED |        100
+ DELIVERED |      14008
 (1 row)
 
  total | delivered | failed | pending | delivering | max_attempts_used 
 -------+-----------+--------+---------+------------+-------------------
-   100 |       100 |      0 |       0 |          0 |                 1
+ 14008 |     14008 |      0 |       0 |          0 |                 1
 (1 row)
 
  attempts 
 ----------
-      100
+    14008
 (1 row)
 
 
@@ -20,15 +20,15 @@ Pager usage is off.
 Pager usage is off.
  delivered |          first_claim          |        last_completion        | drain_seconds | deliveries_per_second 
 -----------+-------------------------------+-------------------------------+---------------+-----------------------
-       100 | 2026-10-27 04:35:17.369203+00 | 2026-10-27 04:35:42.186424+00 |        24.817 |                  4.03
+     14008 | 2026-10-27 06:48:03.451476+00 | 2026-10-27 06:49:08.116729+00 |        64.665 |                216.62
 (1 row)
 
  p50_seconds | p95_seconds | p99_seconds | min_seconds | max_seconds 
 -------------+-------------+-------------+-------------+-------------
-      23.192 |      33.626 |      34.440 |      10.998 |      34.532
+      13.455 |      17.713 |      18.182 |       5.524 |      18.877
 (1 row)
 
 
 ## receiver
-{"requests":100,"bytes":8787,"firstRequestAt":"2026-10-27T04:35:17.618615516Z","lastRequestAt":"2026-10-27T04:35:42.182608022Z","elapsedSeconds":24.563992505999998,"requestsPerSecond":4.070999450743767}
+{"requests":14008,"bytes":1374987,"firstRequestAt":"2026-10-27T06:48:08.011989988Z","lastRequestAt":"2026-10-27T06:49:08.115794844Z","elapsedSeconds":60.103804856,"requestsPerSecond":233.06344803895755}
 

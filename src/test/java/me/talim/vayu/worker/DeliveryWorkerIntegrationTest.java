@@ -140,6 +140,23 @@ class DeliveryWorkerIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void drainsMultipleBatchesPerPoll() {
+        var deliveryIds = java.util.stream.IntStream.range(0, 30)
+                .mapToObj(ignored -> createDelivery(true))
+                .toList();
+        server.stubFor(post(urlEqualTo("/hook"))
+                .willReturn(aResponse().withStatus(200)));
+
+        assertThat(worker.runOnce()).isEqualTo(30);
+
+        for (UUID deliveryId : deliveryIds) {
+            awaitStatus(deliveryId, DeliveryStatus.DELIVERED);
+        }
+
+        server.verify(30, postRequestedFor(urlEqualTo("/hook")));
+    }
+
+    @Test
     void retriesAfterServerErrorAndDeliversOnTheNextAttempt() {
         UUID deliveryId = createDelivery(true);
         server.stubFor(post(urlEqualTo("/hook"))

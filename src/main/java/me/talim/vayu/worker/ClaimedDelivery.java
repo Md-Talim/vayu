@@ -5,5 +5,6 @@ import java.util.UUID;
 public record ClaimedDelivery(
         UUID deliveryId,
         int attemptNumber,
+        int maxAttempts,
         UUID lockToken
 ) {}

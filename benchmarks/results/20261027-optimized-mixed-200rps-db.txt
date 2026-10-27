@@ -1,0 +1,34 @@
+## delivery counts
+Pager usage is off.
+  status   | deliveries 
+-----------+------------
+ DELIVERED |      11322
+(1 row)
+
+ total | delivered | failed | pending | delivering | max_attempts_used 
+-------+-----------+--------+---------+------------+-------------------
+ 11322 |     11322 |      0 |       0 |          0 |                 1
+(1 row)
+
+ attempts 
+----------
+    11322
+(1 row)
+
+
+## delivery latency
+Pager usage is off.
+ delivered |          first_claim          |        last_completion        | drain_seconds | deliveries_per_second 
+-----------+-------------------------------+-------------------------------+---------------+-----------------------
+     11322 | 2026-10-27 06:35:15.266073+00 | 2026-10-27 06:36:13.823365+00 |        58.557 |                193.35
+(1 row)
+
+ p50_seconds | p95_seconds | p99_seconds | min_seconds | max_seconds 
+-------------+-------------+-------------+-------------+-------------
+      11.761 |      18.778 |      19.656 |       0.091 |      19.856
+(1 row)
+
+
+## receiver
+{"requests":11322,"bytes":1053751,"firstRequestAt":"2026-10-27T06:35:20.747080976Z","lastRequestAt":"2026-10-27T06:36:13.819652132Z","elapsedSeconds":53.072571156,"requestsPerSecond":213.3305350276028}
+

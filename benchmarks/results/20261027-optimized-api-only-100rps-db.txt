@@ -1,0 +1,10 @@
+## event counts
+ events |         first_event          |          last_event           
+--------+------------------------------+-------------------------------
+   2972 | 2026-10-27 06:33:13.59404+00 | 2026-10-27 06:33:43.444335+00
+(1 row)
+
+
+## receiver
+{"requests":0,"bytes":0,"elapsedSeconds":0,"requestsPerSecond":0}
+

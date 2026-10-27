@@ -31,7 +31,7 @@ public class DeliveryClaimService {
 
         @SuppressWarnings("unchecked")
         List<Object[]> due = entityManager.createNativeQuery("""
-                SELECT id, attempt_count
+                SELECT id, attempt_count, max_attempts
                 FROM deliveries
                 WHERE status = 'PENDING'
                   AND next_attempt_at <= now()
@@ -71,11 +71,12 @@ public class DeliveryClaimService {
         for (Object[] row : due) {
             UUID deliveryId = (UUID) row[0];
             int attemptNumber = ((Number) row[1]).intValue() + 1;
+            int maxAttempts = ((Number) row[2]).intValue();
 
             Delivery reference = entityManager.getReference(Delivery.class, deliveryId);
             entityManager.persist(new DeliveryAttempt(reference, attemptNumber, now));
 
-            claimed.add(new ClaimedDelivery(deliveryId, attemptNumber, lockToken));
+            claimed.add(new ClaimedDelivery(deliveryId, attemptNumber, maxAttempts, lockToken));
         }
 
         return claimed;

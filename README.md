@@ -198,12 +198,12 @@ Receivers should:
 The worker is embedded in the application. There is no separate worker process.
 
 - `WorkerConfig` enables Spring scheduling and creates the bounded `deliveryExecutor`.
-- `DeliveryPoller` has a `@Scheduled` method that runs every `vayu.worker.poll-interval` (default `1s`) and calls `DeliveryWorker.runOnce()`.
+- `DeliveryPoller` has a `@Scheduled` method that runs every `vayu.worker.poll-interval` (default `100ms`) and calls `DeliveryWorker.runOnce()`.
 - `DeliveryReaperTrigger` has a `@Scheduled` method that runs every `vayu.worker.reaper.interval` (default `30s`).
 - Spring registers both scheduled methods after the application context starts.
 - `fixedDelay` means the next run starts after the previous one finishes. The scheduler has two threads, so the poller and reaper do not block each other.
-- The poller claims a batch and submits each delivery to the executor. HTTP calls normally happen on `delivery-*` threads. If the executor is saturated, `CallerRunsPolicy` can run one on the polling thread.
-- With the defaults, the poller claims one batch per poll, so the default ceiling is about `batch-size / poll-interval` (4 deliveries/sec). The tuned profile raises the batch size and lowers the poll interval; see [Benchmarks](#benchmarks).
+- `runOnce()` claims and submits batches until the executor has less than one batch of queue room, or until `max-batches-per-poll` is reached. HTTP calls normally happen on `delivery-*` threads. If the executor is saturated, `CallerRunsPolicy` can run one on the polling thread.
+- The default worker uses a 100ms poll, 20 deliveries per batch, 16 delivery threads and a 200-slot queue. The tuned benchmark profile uses a 10ms poll, 50 per batch, 32 threads and the same 200-slot queue.
 - Set `vayu.worker.enabled=false` to run the API without background delivery.
 
 The reaper looks for `DELIVERING` rows whose lease has expired. It completes the open attempt with `lease expired`, then either schedules a retry or marks the delivery failed. A late completion from the old worker is rejected by the lock token.
@@ -252,21 +252,26 @@ The `outcome` tag is `delivered`, `retry` or `failed` for delivery attempts. The
 
 Load tested with k6 against the HTTP API and a small Go receiver, with PostgreSQL as the source of truth for delivery state. The load generator and receiver run outside the JVM.
 
-Setup: 11th Gen Intel i3-1115G4 (2 cores, 4 threads), 11 GiB RAM, NVMe SSD, Fedora Linux, application and PostgreSQL 18.6 in Docker, Java 21 runtime. The tuned worker used a 10ms poll interval, batch size 50, 32 delivery threads, a 1,000-slot queue, a 300s lease and a 64-connection Hikari pool. The tuned profile is a benchmark configuration, not the default. Logging for application packages was set to WARN to keep log I/O out of the measured path.
+Setup: 11th Gen Intel i3-1115G4 (2 cores, 4 threads), 11 GiB RAM, NVMe SSD, Fedora Linux, application and PostgreSQL 18.6 in Docker, Java 21 runtime. The default worker uses a 100ms poll, 20 deliveries per batch, 16 delivery threads and a 200-slot queue. The tuned benchmark worker uses a 10ms poll, 50 per batch, 32 threads, a 200-slot queue, a 300s lease and a 64-connection Hikari pool. The tuned profile is not the default. Application logging was set to WARN to keep log I/O out of the measured path.
 
-The defaults are deliberately safety-first. With the default worker, 100 deliveries drained at 4.03/sec, which matches one batch of 4 per 1s poll. The tuned profile drained 10,000 deliveries at 363/sec in isolation.
+The first benchmark exposed two worker limits. The poller claimed only one batch per poll, and completion locked and re-read the delivery and attempt before updating them. I changed `DeliveryWorker.runOnce()` to keep claiming while the executor has room, added `max-batches-per-poll`, replaced the completion read-modify-write with fenced conditional updates, removed an unnecessary flush and raised the defaults to 100ms, 20 per batch and 16 threads. A 1,000-slot queue was also tested; it did not improve throughput and it added latency, so the final tuned profile uses 200 slots.
+
+With the changed defaults, 100 deliveries drained in 0.83s (120.5/sec), up from 4.03/sec. The tuned profile drained 10,000 deliveries at 463 deliveries/sec from database timestamps (493 requests/sec at the receiver), up from 363/sec in the original run. The results below use the final profile.
 
 | Submission target | Actual ingest | API p95 | Delivery p50 | Delivery p95 | Delivery p99 | Avg active threads | Accepted events delivered |
 | ----------------- | ------------- | ------- | ------------ | ------------ | ------------ | ------------------ | ------------------------- |
-| 100/sec           | 99.3/sec      | 863ms   | 17ms         | 1.26s        | 1.61s        | 2.4/32 (7%)        | 5,976/5,976               |
-| 200/sec           | 190.6/sec     | 1.19s   | 1.35s        | 5.45s        | 5.89s        | 14.6/32 (46%)      | 11,477/11,477             |
-| 300/sec           | 278.6/sec     | 1.46s   | 25.2s        | 31.3s        | 31.7s        | 27.0/32 (84%)      | 16,780/16,780             |
+| 100/sec           | 98.9/sec      | 618ms   | 15ms         | 720ms        | 1.61s        | 1.2/32 (4%)        | 6,001/6,001               |
+| 200/sec           | 192.3/sec     | 1.10s   | 41ms         | 3.66s        | 4.73s        | 8.9/32 (28%)       | 11,574/11,574             |
+| 250/sec           | 232.5/sec     | 2.14s   | 13.5s        | 17.7s        | 18.2s        | 30.2/32 (94%)      | 14,008/14,008             |
+| 300/sec           | 271.1/sec     | 1.85s   | 25.9s        | 29.1s        | 29.7s        | 29.6/32 (93%)      | 16,672/16,672             |
 
-Delivery latency is `completed_at - created_at` from PostgreSQL, so it includes the ingest write and commit, queueing and worker time. API latency is k6 `http_req_duration`. Average active threads is the mean number of delivery threads running over all samples in the run, including idle samples. Maximum executor queue depth was 27, 255 and 470 at the three targets.
+Delivery latency is `completed_at - created_at` from PostgreSQL, so it includes the ingest write and commit, queueing and worker time. API latency is k6 `http_req_duration`. Average active threads is the mean number of delivery threads running over all samples in the run, including idle samples. Maximum executor queue depth was 24, 179, 190 and 190 at the four targets.
 
-The ingest path is the first bottleneck. At 100/sec the API p95 is already 863ms while the worker averages only 7% active threads. At 200/sec the worker keeps up but the delivery p95 rises to 5.45s. At a 300/sec target the API accepts 278.6/sec and the worker falls behind, so the delivery p95 rises to 31.3s. A separate worker-disabled run at 100/sec had a 436ms API p95, showing the tail is in the event write path, not in delivery.
+The ingest path is still the first bottleneck. At 100/sec the API p95 is 618ms while the worker averages only 4% active threads. At 200/sec the worker keeps up but the delivery p95 rises to 3.66s. At 250/sec the worker is almost fully occupied and delivery p95 rises to 17.7s. At a 300/sec target the API accepts 271.1/sec and the worker falls behind, so delivery p95 rises to 29.1s. A worker-disabled run at 100/sec had a 1.04s API p95 and a 6.6ms median, so the API tail is in the event write path, not in delivery. That tail is the next investigation target.
 
-Every accepted event was delivered, with no failed or retried deliveries. k6 dropped 25, 524 and 1,221 scheduled iterations at the three targets; those requests were never sent to vayu. These are single-run local measurements on a shared 4-thread laptop, not production capacity. See [`benchmarks/README.md`](benchmarks/README.md) for methodology, raw k6 summaries and SQL output.
+A 1,000-slot executor queue experiment is the other useful finding. At 200/sec it averaged 30.1 active threads, reached a queue depth of 989 and produced a delivery p95 of 18.8s. The 200-slot queue averaged 8.9 active threads, reached 179 queued deliveries and produced a delivery p95 of 3.66s, with essentially the same ingest rate. The deep queue hid backpressure and added latency, so the tuned profile uses 200 slots.
+
+Every accepted event was delivered, with no failed or retried deliveries. k6 dropped 0, 427, 993 and 1,328 scheduled iterations at the four targets; those requests were never sent to vayu. These are single-run local measurements on a shared 4-thread laptop, not production capacity. See [`benchmarks/README.md`](benchmarks/README.md) for methodology, raw k6 summaries and SQL output.
 
 Run the benchmark suite with:
 
@@ -281,10 +286,11 @@ The defaults are in `src/main/resources/application.yml`.
 | Property                      | Default | Meaning                              |
 | ----------------------------- | ------- | ------------------------------------ |
 | `vayu.worker.enabled`         | `true`  | Enables the poller and reaper        |
-| `vayu.worker.poll-interval`   | `1s`    | Delay between claim rounds           |
-| `vayu.worker.batch-size`      | `4`     | Deliveries claimed per round         |
-| `vayu.worker.concurrency`     | `4`     | HTTP worker threads                  |
-| `vayu.worker.queue-capacity`  | `4`     | Executor queue size                  |
+| `vayu.worker.poll-interval`   | `100ms` | Delay between claim rounds           |
+| `vayu.worker.batch-size`      | `20`    | Deliveries claimed per batch         |
+| `vayu.worker.concurrency`     | `16`    | HTTP worker threads                  |
+| `vayu.worker.queue-capacity`  | `200`   | Executor queue size                  |
+| `vayu.worker.max-batches-per-poll` | `10` | Maximum batches claimed per poll |
 | `vayu.worker.lease`           | `60s`   | Time before a delivery can be reaped |
 | `vayu.worker.reaper.interval` | `30s`   | Delay between reaper runs            |
 | `vayu.worker.retry.*`         |         | Base delay, max delay and multiplier |

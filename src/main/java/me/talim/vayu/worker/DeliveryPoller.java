@@ -18,7 +18,7 @@ public class DeliveryPoller {
         this.worker = worker;
     }
 
-    @Scheduled(fixedDelayString = "${vayu.worker.poll-interval:1s}")
+    @Scheduled(fixedDelayString = "${vayu.worker.poll-interval:100ms}")
     public void poll() {
         worker.runOnce();
     }

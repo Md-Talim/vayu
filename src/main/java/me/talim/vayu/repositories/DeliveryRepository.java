@@ -6,11 +6,8 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-
-import jakarta.persistence.LockModeType;
 
 import me.talim.vayu.models.Delivery;
 import me.talim.vayu.models.DeliveryStatus;
@@ -64,8 +61,4 @@ public interface DeliveryRepository extends JpaRepository<Delivery, UUID> {
             @Param("status") DeliveryStatus status,
             @Param("lockToken") UUID lockToken
     );
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT d FROM Delivery d WHERE d.id = :id")
-    Optional<Delivery> findByIdForUpdate(@Param("id") UUID id);
 }

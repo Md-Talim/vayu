@@ -8,83 +8,129 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import me.talim.vayu.models.Delivery;
-import me.talim.vayu.models.DeliveryAttempt;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import me.talim.vayu.models.DeliveryStatus;
-import me.talim.vayu.repositories.DeliveryAttemptRepository;
-import me.talim.vayu.repositories.DeliveryRepository;
 
 @Service
 public class DeliveryCompletionService {
 
     private static final Logger log = LoggerFactory.getLogger(DeliveryCompletionService.class);
 
-    private final DeliveryRepository deliveryRepository;
-    private final DeliveryAttemptRepository attemptRepository;
+    @PersistenceContext
+    private EntityManager entityManager;
+
     private final RetryPolicy retryPolicy;
 
-    public DeliveryCompletionService(
-            DeliveryRepository deliveryRepository,
-            DeliveryAttemptRepository attemptRepository,
-            RetryPolicy retryPolicy
-    ) {
-        this.deliveryRepository = deliveryRepository;
-        this.attemptRepository = attemptRepository;
+    public DeliveryCompletionService(RetryPolicy retryPolicy) {
         this.retryPolicy = retryPolicy;
     }
 
     @Transactional
     public boolean complete(ClaimedDelivery claim, DeliveryOutcome outcome) {
-        Delivery delivery = deliveryRepository.findByIdForUpdate(claim.deliveryId()).orElse(null);
+        Instant now = Instant.now();
+        DeliveryStatus nextStatus = nextStatus(claim, outcome);
+        Instant nextAttemptAt = nextStatus == DeliveryStatus.PENDING
+                ? now.plus(retryDelay(claim, outcome))
+                : null;
 
-        if (delivery == null
-                || delivery.getStatus() != DeliveryStatus.DELIVERING
-                || !claim.lockToken().equals(delivery.getLockToken())) {
+        // The status and lock token in the WHERE clause are the lease fence.
+        // If the reaper changed either value, the update matches no row.
+        int updated = nextStatus == DeliveryStatus.PENDING
+                ? completeAsPending(claim, nextAttemptAt, now)
+                : completeAsTerminal(claim, nextStatus, now);
+
+        if (updated == 0) {
             return false;
         }
 
-        Instant now = Instant.now();
+        int attemptUpdated = entityManager.createNativeQuery("""
+                UPDATE delivery_attempts
+                SET http_status = :httpStatus,
+                    response_body = :responseBody,
+                    error = :error,
+                    completed_at = :now
+                WHERE delivery_id = :deliveryId
+                  AND attempt_number = :attemptNumber
+                """)
+                .setParameter("httpStatus", outcome.httpStatus())
+                .setParameter("responseBody", outcome.responseBody())
+                .setParameter("error", outcome.error())
+                .setParameter("now", now)
+                .setParameter("deliveryId", claim.deliveryId())
+                .setParameter("attemptNumber", claim.attemptNumber())
+                .executeUpdate();
 
-        switch (outcome.type()) {
-            case DELIVERED -> delivery.markDelivered(now);
-            case RETRY -> completeRetry(delivery, claim.attemptNumber(), outcome, now);
-            case FAILED -> delivery.markFailed(now);
-        }
-
-        DeliveryAttempt attempt = attemptRepository
-                .findByDelivery_IdAndAttemptNumber(claim.deliveryId(), claim.attemptNumber())
-                .orElse(null);
-
-        if (attempt == null) {
+        if (attemptUpdated == 0) {
             log.warn(
                     "Delivery {} is missing attempt {}",
                     claim.deliveryId(),
                     claim.attemptNumber()
-            );
-        } else {
-            attempt.complete(
-                    outcome.httpStatus(),
-                    outcome.responseBody(),
-                    outcome.error(),
-                    now
             );
         }
 
         return true;
     }
 
-    private void completeRetry(
-            Delivery delivery,
-            int attemptNumber,
-            DeliveryOutcome outcome,
+    private DeliveryStatus nextStatus(ClaimedDelivery claim, DeliveryOutcome outcome) {
+        return switch (outcome.type()) {
+            case DELIVERED -> DeliveryStatus.DELIVERED;
+            case FAILED -> DeliveryStatus.FAILED;
+            case RETRY -> claim.attemptNumber() >= claim.maxAttempts()
+                    ? DeliveryStatus.FAILED
+                    : DeliveryStatus.PENDING;
+        };
+    }
+
+    private Duration retryDelay(ClaimedDelivery claim, DeliveryOutcome outcome) {
+        return retryPolicy.nextDelay(claim.attemptNumber(), outcome.retryAfter());
+    }
+
+    private int completeAsPending(
+            ClaimedDelivery claim,
+            Instant nextAttemptAt,
             Instant now
     ) {
-        if (attemptNumber >= delivery.getMaxAttempts()) {
-            delivery.markFailed(now);
-            return;
-        }
+        return entityManager.createNativeQuery("""
+                UPDATE deliveries
+                SET status = 'PENDING',
+                    next_attempt_at = :nextAttemptAt,
+                    completed_at = NULL,
+                    locked_at = NULL,
+                    lock_token = NULL,
+                    updated_at = :now
+                WHERE id = :deliveryId
+                  AND status = 'DELIVERING'
+                  AND lock_token = :lockToken
+                """)
+                .setParameter("nextAttemptAt", nextAttemptAt)
+                .setParameter("now", now)
+                .setParameter("deliveryId", claim.deliveryId())
+                .setParameter("lockToken", claim.lockToken())
+                .executeUpdate();
+    }
 
-        Duration delay = retryPolicy.nextDelay(attemptNumber, outcome.retryAfter());
-        delivery.scheduleRetry(now.plus(delay), now);
+    private int completeAsTerminal(
+            ClaimedDelivery claim,
+            DeliveryStatus status,
+            Instant now
+    ) {
+        return entityManager.createNativeQuery("""
+                UPDATE deliveries
+                SET status = :status,
+                    next_attempt_at = NULL,
+                    completed_at = :now,
+                    locked_at = NULL,
+                    lock_token = NULL,
+                    updated_at = :now
+                WHERE id = :deliveryId
+                  AND status = 'DELIVERING'
+                  AND lock_token = :lockToken
+                """)
+                .setParameter("status", status.name())
+                .setParameter("now", now)
+                .setParameter("deliveryId", claim.deliveryId())
+                .setParameter("lockToken", claim.lockToken())
+                .executeUpdate();
     }
 }

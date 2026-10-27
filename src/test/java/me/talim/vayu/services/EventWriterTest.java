@@ -53,7 +53,7 @@ class EventWriterTest {
                         new Subscription(first, "payment.succeeded"),
                         new Subscription(second, "payment.succeeded")
                 ));
-        when(eventRepository.saveAndFlush(any(Event.class)))
+        when(eventRepository.save(any(Event.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         CreateEventResult result = eventWriter.createEvent(request, "idem-1");
@@ -62,7 +62,7 @@ class EventWriterTest {
         assertThat(result.response().deliveriesCreated()).isEqualTo(2);
 
         ArgumentCaptor<Event> eventCaptor = ArgumentCaptor.forClass(Event.class);
-        verify(eventRepository).saveAndFlush(eventCaptor.capture());
+        verify(eventRepository).save(eventCaptor.capture());
         assertThat(eventCaptor.getValue().getType()).isEqualTo("payment.succeeded");
         assertThat(eventCaptor.getValue().getPayload()).isEqualTo("{\"amount\":100}");
         assertThat(eventCaptor.getValue().getIdempotencyKey()).isEqualTo("idem-1");
@@ -87,7 +87,7 @@ class EventWriterTest {
 
         when(subscriptionRepository.findAllByEventTypeAndEndpoint_ActiveTrue("payment.succeeded"))
                 .thenReturn(List.of());
-        when(eventRepository.saveAndFlush(any(Event.class)))
+        when(eventRepository.save(any(Event.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         CreateEventResult result = eventWriter.createEvent(request, "idem-1");

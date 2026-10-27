@@ -15,10 +15,11 @@ import jakarta.validation.constraints.NotNull;
 @ConfigurationProperties(prefix = "vayu.worker")
 public record WorkerProperties(
         @DefaultValue("true") boolean enabled,
-        @DefaultValue("1s") @NotNull Duration pollInterval,
-        @DefaultValue("4") @Min(1) int batchSize,
-        @DefaultValue("4") @Min(1) int concurrency,
-        @DefaultValue("4") @Min(0) int queueCapacity,
+        @DefaultValue("100ms") @NotNull Duration pollInterval,
+        @DefaultValue("20") @Min(1) int batchSize,
+        @DefaultValue("16") @Min(1) int concurrency,
+        @DefaultValue("200") @Min(0) int queueCapacity,
+        @DefaultValue("10") @Min(1) int maxBatchesPerPoll,
         @DefaultValue("2s") @NotNull Duration connectTimeout,
         @DefaultValue("5s") @NotNull Duration readTimeout,
         @DefaultValue("60s") @NotNull Duration lease,
