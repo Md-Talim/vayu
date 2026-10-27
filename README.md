@@ -1,6 +1,7 @@
 # vayu
 
 [![CI](https://github.com/md-talim/vayu/actions/workflows/ci.yml/badge.svg)](https://github.com/md-talim/vayu/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/md-talim/vayu)](https://github.com/md-talim/vayu/releases)
 [![Java version](https://img.shields.io/badge/Java-21-orange)](https://adoptium.net/)
 [![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
